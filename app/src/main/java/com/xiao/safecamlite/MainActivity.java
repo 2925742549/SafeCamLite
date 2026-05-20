@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.ConnectivityManager;
 import android.net.LinkAddress;
@@ -14,11 +15,12 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
-import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.core.app.ActivityCompat;
@@ -30,50 +32,86 @@ import java.util.List;
 
 public class MainActivity extends Activity {
     private static final int REQ = 44;
+
     private TextView status;
     private EditText pinInput;
     private EditText portInput;
+    private CheckBox recordingCheck;
+    private EditText recordSecondsInput;
+    private EditText retentionHoursInput;
+    private EditText maxStorageInput;
+    private CheckBox autoStartCheck;
+        private CheckBox nightModeCheck;
+        private CheckBox torchCheck;
+        private CheckBox nightGrayCheck;
+        private EditText nightBrightnessInput;
+        private EditText nightContrastInput;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
+        ScrollView scroll = new ScrollView(this);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(36, 42, 36, 36);
+        root.setPadding(34, 36, 34, 36);
         root.setGravity(Gravity.CENTER_HORIZONTAL);
+        scroll.addView(root);
 
         TextView title = new TextView(this);
-        title.setText("SafeCam Lite");
+        title.setText("SafeCam Lite Pro");
         title.setTextSize(26);
         title.setGravity(Gravity.CENTER);
         root.addView(title, new LinearLayout.LayoutParams(-1, -2));
 
         TextView desc = new TextView(this);
-        desc.setText("旧安卓手机监控端。启动后请保持充电和联网，另一台手机用浏览器打开下方地址查看。");
+        desc.setText("旧安卓手机监控端：实时观看、循环记录、网页回放、夜间低光增强、手电补光、开机自启、外出观看。请只用于自有场所和明确授权环境。");
         desc.setTextSize(15);
-        desc.setPadding(0, 20, 0, 20);
+        desc.setPadding(0, 18, 0, 18);
         root.addView(desc, new LinearLayout.LayoutParams(-1, -2));
 
-        pinInput = new EditText(this);
-        pinInput.setHint("访问 PIN，至少 4 位，例如 8392");
-        pinInput.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        pinInput.setText("123456");
-        root.addView(pinInput, new LinearLayout.LayoutParams(-1, -2));
+        pinInput = input("访问 PIN，至少 4 位，例如 8392", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        portInput = input("端口，例如 8080", InputType.TYPE_CLASS_NUMBER);
+        recordingCheck = new CheckBox(this);
+        recordingCheck.setText("开启循环记录 / 回放");
+        recordSecondsInput = input("记录间隔秒数，建议旧手机 3-10 秒", InputType.TYPE_CLASS_NUMBER);
+        retentionHoursInput = input("保留小时数，例如 24 / 72 / 168", InputType.TYPE_CLASS_NUMBER);
+        maxStorageInput = input("最大占用空间 MB，例如 1024", InputType.TYPE_CLASS_NUMBER);
+        autoStartCheck = new CheckBox(this);
+        autoStartCheck.setText("开机后自动启动监控服务");
 
-        portInput = new EditText(this);
-        portInput.setHint("端口，例如 8080");
-        portInput.setInputType(InputType.TYPE_CLASS_NUMBER);
-        portInput.setText("8080");
-        root.addView(portInput, new LinearLayout.LayoutParams(-1, -2));
+        root.addView(label("访问密码 PIN"));
+        root.addView(pinInput);
+        root.addView(label("端口"));
+        root.addView(portInput);
+        root.addView(recordingCheck);
+        root.addView(label("循环记录间隔，越小越像录像，但越占空间"));
+        root.addView(recordSecondsInput);
+        root.addView(label("最多保留多少小时"));
+        root.addView(retentionHoursInput);
+        root.addView(label("最多占用多少 MB"));
+        root.addView(maxStorageInput);
+        root.addView(autoStartCheck);
+            root.addView(label("夜视/弱光增强"));
+            root.addView(nightModeCheck);
+            root.addView(torchCheck);
+            root.addView(nightGrayCheck);
+            root.addView(label("夜间提亮强度"));
+            root.addView(nightBrightnessInput);
+            root.addView(label("夜间对比增强"));
+            root.addView(nightContrastInput);
+
+        Button save = new Button(this);
+        save.setText("保存设置");
+        root.addView(save, new LinearLayout.LayoutParams(-1, -2));
 
         Button start = new Button(this);
-        start.setText("Start Camera Server");
+        start.setText("START CAMERA SERVER");
         root.addView(start, new LinearLayout.LayoutParams(-1, -2));
 
         Button stop = new Button(this);
-        stop.setText("Stop");
+        stop.setText("STOP");
         root.addView(stop, new LinearLayout.LayoutParams(-1, -2));
 
         Button battery = new Button(this);
@@ -82,13 +120,20 @@ public class MainActivity extends Activity {
 
         status = new TextView(this);
         status.setTextSize(15);
-        status.setPadding(0, 22, 0, 0);
+        status.setPadding(0, 20, 0, 0);
         root.addView(status, new LinearLayout.LayoutParams(-1, -2));
 
-        setContentView(root);
+        setContentView(scroll);
+        loadSettingsToUi();
         updateStatus();
 
+        save.setOnClickListener(v -> {
+            saveSettings();
+            updateStatus();
+        });
+
         start.setOnClickListener(v -> {
+            saveSettings();
             if (!hasPermissions()) {
                 requestNeededPermissions();
                 return;
@@ -99,7 +144,7 @@ public class MainActivity extends Activity {
         stop.setOnClickListener(v -> {
             Intent i = new Intent(this, CameraStreamService.class);
             i.setAction(CameraStreamService.ACTION_STOP);
-            ContextCompat.startForegroundService(this, i);
+            startService(i);
             status.setText("已发送停止指令。");
         });
 
@@ -110,6 +155,62 @@ public class MainActivity extends Activity {
                 startActivity(new Intent(Settings.ACTION_SETTINGS));
             }
         });
+    }
+
+    private TextView label(String s) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(14);
+        t.setPadding(0, 12, 0, 2);
+        return t;
+    }
+
+    private EditText input(String hint, int type) {
+        EditText e = new EditText(this);
+        e.setHint(hint);
+        e.setInputType(type);
+        return e;
+    }
+
+    private void loadSettingsToUi() {
+        pinInput.setText(AppSettings.pin(this));
+        portInput.setText(String.valueOf(AppSettings.port(this)));
+        recordingCheck.setChecked(AppSettings.recordingEnabled(this));
+        recordSecondsInput.setText(String.valueOf(AppSettings.recordSeconds(this)));
+        retentionHoursInput.setText(String.valueOf(AppSettings.retentionHours(this)));
+        maxStorageInput.setText(String.valueOf(AppSettings.maxStorageMb(this)));
+        autoStartCheck.setChecked(AppSettings.autoStart(this));
+            nightModeCheck.setChecked(AppSettings.nightMode(this));
+            torchCheck.setChecked(AppSettings.torchEnabled(this));
+            nightGrayCheck.setChecked(AppSettings.nightGray(this));
+            nightBrightnessInput.setText(String.valueOf(AppSettings.nightBrightness(this)));
+            nightContrastInput.setText(String.valueOf(AppSettings.nightContrast(this)));
+    }
+
+    private void saveSettings() {
+        String pin = pinInput.getText().toString().trim();
+        if (pin.length() < 4) pin = "123456";
+
+        int port = parseInt(portInput.getText().toString(), 8080);
+        int sec = parseInt(recordSecondsInput.getText().toString(), 3);
+        int hours = parseInt(retentionHoursInput.getText().toString(), 24);
+        int mb = parseInt(maxStorageInput.getText().toString(), 1024);
+            int nightBrightness = parseInt(nightBrightnessInput.getText().toString(), 45);
+            int nightContrast = parseInt(nightContrastInput.getText().toString(), 25);
+
+        SharedPreferences.Editor e = AppSettings.prefs(this).edit();
+        e.putString(AppSettings.KEY_PIN, pin);
+        e.putInt(AppSettings.KEY_PORT, AppSettings.clamp(port, 1024, 65535));
+        e.putBoolean(AppSettings.KEY_RECORDING, recordingCheck.isChecked());
+        e.putInt(AppSettings.KEY_RECORD_SECONDS, AppSettings.clamp(sec, 1, 60));
+        e.putInt(AppSettings.KEY_RETENTION_HOURS, AppSettings.clamp(hours, 1, 24 * 30));
+        e.putInt(AppSettings.KEY_MAX_STORAGE_MB, AppSettings.clamp(mb, 100, 1024 * 50));
+        e.putBoolean(AppSettings.KEY_AUTO_START, autoStartCheck.isChecked());
+        e.apply();
+    }
+
+    private int parseInt(String s, int fallback) {
+        try { return Integer.parseInt(s.trim()); } catch (Exception e) { return fallback; }
     }
 
     private boolean hasPermissions() {
@@ -134,44 +235,52 @@ public class MainActivity extends Activity {
         if (requestCode == REQ && hasPermissions()) {
             startServiceNow();
         } else {
-            status.setText("需要允许摄像头权限，否则无法作为监控摄像头使用。");
+            status.setText("需要允许摄像头权限和通知权限，否则无法长期运行。");
         }
     }
 
     private void startServiceNow() {
-        int port = 8080;
-        try { port = Integer.parseInt(portInput.getText().toString().trim()); } catch (Exception ignored) {}
-        String pin = pinInput.getText().toString().trim();
-        if (pin.length() < 4) pin = "123456";
-
         Intent i = new Intent(this, CameraStreamService.class);
         i.setAction(CameraStreamService.ACTION_START);
-        i.putExtra(CameraStreamService.EXTRA_PORT, port);
-        i.putExtra(CameraStreamService.EXTRA_PIN, pin);
         ContextCompat.startForegroundService(this, i);
-
-        status.setText(buildStatusText(port, pin));
+        status.setText(buildStatusText());
     }
 
     private void updateStatus() {
-        int port = 8080;
-        try { port = Integer.parseInt(portInput != null ? portInput.getText().toString().trim() : "8080"); } catch (Exception ignored) {}
-        String pin = pinInput != null ? pinInput.getText().toString().trim() : "123456";
-        status.setText(buildStatusText(port, pin));
+        status.setText(buildStatusText());
     }
 
-    private String buildStatusText(int port, String pin) {
+    private String buildStatusText() {
+        int port = AppSettings.port(this);
+        String pin = AppSettings.pin(this);
         List<String> ips = getLocalIpv4Addresses();
+
         StringBuilder sb = new StringBuilder();
-        sb.append("查看地址：\n");
+        sb.append("实时查看地址：\n");
         if (ips.isEmpty()) {
-            sb.append("请先连接 Wi-Fi，再点击 Start。\n");
+            sb.append("请先连接 Wi-Fi / Tailscale / ZeroTier，再点击 START。\n");
         } else {
             for (String ip : ips) {
                 sb.append("http://").append(ip).append(":").append(port).append("/?pin=").append(pin).append("\n");
             }
         }
-        sb.append("\n安全建议：只在自己的场所使用；不要直接公网映射端口；外网查看建议用 Tailscale / ZeroTier 组网。");
+
+        sb.append("\n回放地址：\n");
+        if (!ips.isEmpty()) {
+            for (String ip : ips) {
+                sb.append("http://").append(ip).append(":").append(port).append("/recordings?pin=").append(pin).append("\n");
+            }
+        }
+
+        sb.append("\n循环记录：").append(AppSettings.recordingEnabled(this) ? "开启" : "关闭");
+        sb.append(" ｜ 间隔：").append(AppSettings.recordSeconds(this)).append(" 秒");
+        sb.append(" ｜ 保留：").append(AppSettings.retentionHours(this)).append(" 小时");
+        sb.append(" ｜ 上限：").append(AppSettings.maxStorageMb(this)).append(" MB");
+        sb.append("\n已用空间：").append(RecordingManager.humanSize(RecordingManager.totalBytes(this)));
+
+        sb.append("\n\n外出观看：推荐两台手机都装 Tailscale / ZeroTier。旧手机连上后，如果上面出现 100.x.x.x 这类虚拟 IP，就在外出手机浏览器打开对应地址。");
+        sb.append("\n\n长期运行：插电、关闭省电限制、允许后台运行、不要直接公网映射端口。");
+
         return sb.toString();
     }
 
