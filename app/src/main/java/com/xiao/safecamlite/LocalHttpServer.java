@@ -1,18 +1,17 @@
 package com.xiao.safecamlite;
 
-import fi.iki.elonen.NanoHTTPD;
-
 import android.content.Context;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
 import java.util.Map;
+
+import fi.iki.elonen.NanoHTTPD;
 
 final class LocalHttpServer extends NanoHTTPD {
     private final Context appContext;
@@ -84,14 +83,19 @@ final class LocalHttpServer extends NanoHTTPD {
     private Response livePage() {
         String p = esc(pin);
         String recordingText = AppSettings.recordingEnabled(appContext) ? "ON" : "OFF";
-            String nightText = AppSettings.nightMode(appContext) ? "夜间增强 ON" : "夜间增强 OFF";
-            String torchText = AppSettings.torchEnabled(appContext) ? "手电补光 ON" : "手电补光 OFF";
+        String nightText = AppSettings.nightMode(appContext) ? "夜间增强 ON" : "夜间增强 OFF";
+        String torchText = AppSettings.torchEnabled(appContext) ? "手电补光 ON" : "手电补光 OFF";
+
         String html = "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
-                + "<title>SafeCam Lite Pro</title>" + css() + "</head><body>"
-                + "<header><b>SafeCam Lite Pro</b><nav><a href='/?pin=" + p + "'>实时</a><a href='/recordings?pin=" + p + "'>回放</a><a href='/guide?pin=" + p + "'>外网</a></nav></header>"
-                + "<main><div class='card'><h2>实时监控</h2><p>录像循环记录：" + recordingText + "，记录间隔：" + AppSettings.recordSeconds(appContext) + " 秒，" + nightText + "，" + torchText + "，已用空间：" + RecordingManager.humanSize(RecordingManager.totalBytes(appContext)) + "</p>"
+                + "<title>SafeCam Lite Pro Night</title>" + css() + "</head><body>"
+                + "<header><b>SafeCam Lite Pro Night</b><nav><a href='/?pin=" + p + "'>实时</a><a href='/recordings?pin=" + p + "'>回放</a><a href='/guide?pin=" + p + "'>外网</a></nav></header>"
+                + "<main><div class='card'><h2>实时监控</h2>"
+                + "<p>循环记录：" + recordingText
+                + "，记录间隔：" + AppSettings.recordSeconds(appContext) + " 秒，"
+                + nightText + "，" + torchText
+                + "，已用空间：" + RecordingManager.humanSize(RecordingManager.totalBytes(appContext)) + "</p>"
                 + "<img id='cam' alt='camera frame' src='/snapshot.jpg?pin=" + p + "&t=0'>"
-                + "<div><button onclick='toggle()'>暂停 / 继续</button><button onclick='location.href="/recordings?pin=" + p + ""'>查看回放</button></div>"
+                + "<div><button onclick='toggle()'>暂停 / 继续</button><a class='btn' href='/recordings?pin=" + p + "'>查看回放</a></div>"
                 + "</div></main>"
                 + "<script>let on=true;function loop(){if(on){document.getElementById('cam').src='/snapshot.jpg?pin=" + p + "&t='+Date.now();}setTimeout(loop,500);}loop();function toggle(){on=!on;}</script>"
                 + "</body></html>";
@@ -109,7 +113,7 @@ final class LocalHttpServer extends NanoHTTPD {
                 + "<script>"
                 + "let items=[],idx=0,timer=null;const pin='" + p + "';"
                 + "fetch('/api/recordings?pin='+pin+'&t='+Date.now()).then(r=>r.json()).then(d=>{items=d.items||[];render();if(items.length){show(items[items.length-1].name);}});"
-                + "function render(){let el=document.getElementById('list');if(!items.length){el.innerHTML='<p>暂无回放记录。请确认 App 里开启了循环记录，并运行几分钟。</p>';return;}el.innerHTML=items.slice().reverse().map((x,i)=>'<button class="row" onclick="show(\''+x.name+'\')">'+x.time+' ｜ '+x.size+'</button>').join('');}"
+                + "function render(){let el=document.getElementById('list');if(!items.length){el.innerHTML='<p>暂无回放记录。请确认 App 里开启了循环记录，并运行几分钟。</p>';return;}el.innerHTML=items.slice().reverse().map((x)=>'<button class=\"row\" onclick=\"show(\\''+x.name+'\\')\">'+x.time+' ｜ '+x.size+'</button>').join('');}"
                 + "function show(n){document.getElementById('play').src='/recording/'+encodeURIComponent(n)+'?pin='+pin+'&t='+Date.now();idx=items.findIndex(x=>x.name===n);}"
                 + "function playAuto(){if(!items.length)return;stopAuto();timer=setInterval(()=>{show(items[idx].name);idx=(idx+1)%items.length;},700);}"
                 + "function stopAuto(){if(timer){clearInterval(timer);timer=null;}}"
@@ -158,7 +162,7 @@ final class LocalHttpServer extends NanoHTTPD {
                 + "header b{font-size:18px}nav{float:right}nav a{color:#fff;text-decoration:none;margin-left:12px;font-size:14px}"
                 + "main{padding:14px}.card{max-width:980px;margin:auto;background:#181b22;border-radius:14px;padding:14px;box-shadow:0 4px 20px #0006}"
                 + "img{width:100%;max-height:72vh;object-fit:contain;background:#000;border-radius:10px;margin:8px 0}"
-                + "button{border:0;border-radius:10px;padding:11px 14px;margin:6px;background:#1565c0;color:white;font-size:15px}"
+                + "button,.btn{display:inline-block;text-decoration:none;border:0;border-radius:10px;padding:11px 14px;margin:6px;background:#1565c0;color:white;font-size:15px}"
                 + ".row{display:block;width:100%;text-align:left;background:#2a2e38}.list{margin-top:10px}code{background:#2a2e38;padding:2px 5px;border-radius:5px}"
                 + "p,li{line-height:1.55;color:#ddd}"
                 + "</style>";
@@ -166,7 +170,10 @@ final class LocalHttpServer extends NanoHTTPD {
 
     private static String esc(String s) {
         if (s == null) return "";
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace(""", "&quot;");
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;");
     }
 
     private static String json(String s) {

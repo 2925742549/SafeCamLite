@@ -1,4 +1,4 @@
-name: Build SafeCam Lite APK
+name: Build SafeCam Lite Pro Night APK
 
 on:
   workflow_dispatch:
@@ -38,5 +38,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SafeCamLite-debug-apk
+          name: SafeCamLiteProNight-debug-apk
           path: app/build/outputs/apk/debug/*.apk
